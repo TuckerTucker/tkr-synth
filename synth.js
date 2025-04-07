@@ -1,4 +1,4 @@
-// --- Global Variables ---
+ // --- Global Variables ---
 let audioContext = null;
 let masterGain = null;
 let currentOscillator = null;
@@ -596,11 +596,37 @@ function noteOn(noteName) { // Plays based on note NAME (from UI click/keyboard)
     currentFilter.Q.setValueAtTime(parseFloat(filterResonanceSlider.value), now);
 
     currentVCA.gain.setValueAtTime(0, now);
-    currentVCA.gain.linearRampToValueAtTime(1.0, now + 0.01); // Default full gain for UI click/key
+    currentVCA.gain.linearRampToValueAtTime(1.0, now + 0.01); // Default full gain for UI click
 
+    // Connect main signal path: Osc -> Filter -> VCA -> tremoloGain (-> analyser is already connected)
     currentOscillator.connect(currentFilter);
     currentFilter.connect(currentVCA);
-    currentVCA.connect(masterGain);
+    currentVCA.connect(tremoloGain); // Connect VCA to tremoloGain, not masterGain
+
+    // --- LFO Connection Logic (Copied from midiNoteOn) ---
+    lfos.forEach(lfoInstance => {
+        const targetType = lfoInstance.targetSelect.value;
+        switch (targetType) {
+            case 'pitch':
+                lfoInstance.connect(currentOscillator, 'detune');
+                break;
+            case 'filter':
+                lfoInstance.connect(currentFilter, 'frequency');
+                break;
+            case 'amplitude':
+                lfoInstance.connect(tremoloGain, 'gain');
+                break;
+            case 'none':
+            default:
+                lfoInstance.disconnect(); // Ensure disconnected if target is none
+                break;
+        }
+    });
+    // Ensure tremolo gain is reset if *no* LFO is targeting amplitude
+    if (!lfos.some(lfo => lfo.targetSelect.value === 'amplitude' && parseFloat(lfo.depthSlider.value) > 0)) {
+         if (tremoloGain) tremoloGain.gain.setValueAtTime(1.0, now);
+    }
+    // --- End LFO Connection Logic ---
 
     currentOscillator.start(now);
     updateKeyVisual(noteName, true);
