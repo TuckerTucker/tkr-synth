@@ -1,0 +1,213 @@
+/* Basic Reset & Body Styling */
+body {
+    font-family: sans-serif;
+    background-color: #f4f4f4;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    margin: 0;
+}
+
+h1 {
+    color: #5a5a5a;
+    margin-bottom: 20px;
+}
+
+/* Buttons */
+button {
+    padding: 10px 20px;
+    font-size: 1em;
+    cursor: pointer;
+    margin: 10px 5px 0 5px; /* Adjusted margin */
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+#enable-midi-button {
+    padding: 10px 20px;
+    font-size: 1em;
+    cursor: pointer;
+    margin: 10px 5px 0 5px; /* Adjusted margin */
+    background-color: #8bc34a; /* Greenish */
+    color: white;
+    border: none;
+    border-radius: 4px;
+}
+#enable-midi-button:hover {
+    background-color: #7cb342;
+}
+#enable-midi-button:disabled {
+    background-color: #cccccc;
+    cursor: default;
+}
+
+
+#midi-status {
+    font-size: 0.9em;
+    color: #555;
+    margin-top: 5px;
+    padding: 5px 10px;
+    background-color: #eee;
+    border-radius: 4px;
+    min-width: 150px;
+    text-align: center;
+}
+
+/* Synthesizer Container */
+#synthesizer {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    margin-top: 20px;
+    width: auto; /* Adjust as needed */
+    max-width: 800px; /* Example max width */
+}
+
+/* Control Sections */
+.control-section {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.control-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.control-section h2 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.2em;
+    color: #666;
+}
+
+/* Individual Controls */
+.control {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.control label {
+    min-width: 100px; /* Adjust for alignment */
+    margin-right: 10px;
+    font-size: 0.9em;
+}
+
+.control input[type="range"] {
+    flex-grow: 1;
+    cursor: pointer;
+}
+
+.control select {
+    padding: 5px;
+    font-size: 0.9em;
+}
+
+/* Keyboard Styling */
+#keyboard {
+    display: flex;
+    position: relative; /* Needed for positioning black keys */
+    height: 150px; /* Adjust height as needed */
+    margin-top: 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    overflow: hidden; /* Hide parts of black keys extending beyond */
+}
+
+.key {
+    border: 1px solid #aaa;
+    box-sizing: border-box; /* Include border in width/height */
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+}
+
+.white-key {
+    background-color: white;
+    width: 50px; /* Adjust width */
+    height: 100%;
+    border-right: 1px solid #ccc;
+}
+.white-key:last-child {
+    border-right: none;
+}
+
+.white-key:hover {
+    background-color: #eee;
+}
+
+.white-key.active {
+    background-color: #a0c4ff; /* Light blue for active */
+}
+
+.black-key {
+    background-color: #333;
+    width: 30px; /* Adjust width */
+    height: 60%; /* Percentage of white key height */
+    position: absolute; /* Position relative to keyboard container */
+    z-index: 1; /* Appear above white keys */
+    border: 1px solid #222;
+    border-top: none;
+    border-radius: 0 0 3px 3px;
+}
+
+.black-key:hover {
+    background-color: #555;
+}
+
+.black-key.active {
+    background-color: #507bbf; /* Darker blue for active */
+}
+
+/* Positioning Black Keys (Based on 50px white key width, 30px black key width) */
+/* C3 Octave */
+.key[data-note="C#3"] { left: 35px; }  /* After C3 (index 0) */
+.key[data-note="D#3"] { left: 85px; }  /* After D3 (index 1) */
+.key[data-note="F#3"] { left: 185px; } /* After F3 (index 3) */
+.key[data-note="G#3"] { left: 235px; } /* After G3 (index 4) */
+.key[data-note="A#3"] { left: 285px; } /* After A3 (index 5) */
+/* C4 Octave */
+.key[data-note="C#4"] { left: 385px; } /* After C4 (index 7) */
+.key[data-note="D#4"] { left: 435px; } /* After D4 (index 8) */
+.key[data-note="F#4"] { left: 535px; } /* After F4 (index 10) */
+.key[data-note="G#4"] { left: 585px; } /* After G4 (index 11) */
+.key[data-note="A#4"] { left: 635px; } /* After A4 (index 12) */
+
+/* Oscilloscope Styling */
+.oscilloscope-section {
+    text-align: center; /* Center the heading */
+}
+
+#oscilloscope {
+    background-color: #222; /* Dark background */
+    border: 1px solid #444;
+    border-radius: 4px;
+    margin-top: 10px;
+    width: 100%; /* Make it responsive within container */
+    max-width: 600px; /* Match canvas width attribute */
+    height: 100px; /* Match canvas height attribute */
+}
+
+
+/* Utility */
+.hidden {
+    display: none;
+}
+
+.disabled-ui {
+    opacity: 0.5; /* Make it look faded */
+    pointer-events: none; /* Prevent clicks, drags, etc. */
+    /* Optionally add a filter for greyscale or blur */
+    /* filter: grayscale(80%); */
+}

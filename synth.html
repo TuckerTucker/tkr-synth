@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Synth</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Simple Web Synthesizer</h1>
+
+    <button id="start-audio-button">Start Audio</button>
+    <button id="enable-midi-button" class="hidden">Enable MIDI Input</button> <!-- Added MIDI Button -->
+    <div id="midi-status" class="hidden">MIDI Status: Disconnected</div> <!-- Added MIDI Status Display -->
+
+
+    <div id="synthesizer" class="disabled-ui"> <!-- Changed hidden to disabled-ui -->
+        <!-- ... (rest of the controls) ... -->
+
+         <div class="control-section global-controls">
+            <h2>Global</h2>
+            <div class="control">
+                <label for="master-volume">Master Vol:</label>
+                <input type="range" id="master-volume" min="0" max="1" step="0.01" value="0.7" data-cc="7"> <!-- Added data-cc -->
+            </div>
+            <div class="control">
+                <label for="osc-waveform">Osc Wave:</label>
+                <select id="osc-waveform">
+                    <option value="sine">Sine</option>
+                    <option value="square">Square</option>
+                    <option value="sawtooth">Sawtooth</option>
+                    <option value="triangle">Triangle</option>
+                </select>
+                 <!-- CC mapping for waveform is tricky, often done with specific ranges -->
+            </div>
+             <div class="control">
+                <label for="filter-cutoff">Filter Cutoff:</label>
+                <input type="range" id="filter-cutoff" min="20" max="15000" step="1" value="5000" data-cc="74"> <!-- Added data-cc -->
+                 <!-- Consider logarithmic scale later -->
+            </div>
+             <div class="control">
+                <label for="filter-resonance">Filter Reso:</label>
+                <input type="range" id="filter-resonance" min="0" max="30" step="0.1" value="1" data-cc="71"> <!-- Added data-cc -->
+            </div>
+        </div>
+
+        <!-- Oscilloscope Display -->
+        <div class="control-section oscilloscope-section">
+             <h2>Oscilloscope</h2>
+             <canvas id="oscilloscope" width="600" height="100"></canvas>
+        </div>
+
+
+        <!-- Expanded Keyboard (C3-C5) -->
+        <div id="keyboard">
+            <!-- White keys -->
+            <div class="key white-key" data-note="C3" data-midi="48"></div>
+            <div class="key white-key" data-note="D3" data-midi="50"></div>
+            <div class="key white-key" data-note="E3" data-midi="52"></div>
+            <div class="key white-key" data-note="F3" data-midi="53"></div>
+            <div class="key white-key" data-note="G3" data-midi="55"></div>
+            <div class="key white-key" data-note="A3" data-midi="57"></div>
+            <div class="key white-key" data-note="B3" data-midi="59"></div>
+            <div class="key white-key" data-note="C4" data-midi="60"></div>
+            <div class="key white-key" data-note="D4" data-midi="62"></div>
+            <div class="key white-key" data-note="E4" data-midi="64"></div>
+            <div class="key white-key" data-note="F4" data-midi="65"></div>
+            <div class="key white-key" data-note="G4" data-midi="67"></div>
+            <div class="key white-key" data-note="A4" data-midi="69"></div>
+            <div class="key white-key" data-note="B4" data-midi="71"></div>
+            <div class="key white-key" data-note="C5" data-midi="72"></div>
+            <!-- Black keys -->
+            <div class="key black-key" data-note="C#3" data-midi="49"></div>
+            <div class="key black-key" data-note="D#3" data-midi="51"></div>
+            <div class="key black-key" data-note="F#3" data-midi="54"></div>
+            <div class="key black-key" data-note="G#3" data-midi="56"></div>
+            <div class="key black-key" data-note="A#3" data-midi="58"></div>
+            <div class="key black-key" data-note="C#4" data-midi="61"></div>
+            <div class="key black-key" data-note="D#4" data-midi="63"></div>
+            <div class="key black-key" data-note="F#4" data-midi="66"></div>
+            <div class="key black-key" data-note="G#4" data-midi="68"></div>
+            <div class="key black-key" data-note="A#4" data-midi="70"></div>
+        </div>
+    </div>
+
+    <script src="synth.js"></script>
+</body>
+</html>
