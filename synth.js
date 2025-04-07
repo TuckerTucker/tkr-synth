@@ -13,6 +13,9 @@ let scopeCanvas = null; // Canvas element
 let scopeCtx = null; // Canvas 2D context
 let scopeDataArray = null; // Array for waveform data
 let scopeAnimationId = null; // To control the animation loop
+let lfo = null; // LFO oscillator node
+let lfoDepth = null; // Gain node controlling LFO amount
+let tremoloGain = null; // Extra gain node for amplitude modulation
 
 // --- UI Elements ---
 const startButton = document.getElementById('start-audio-button');
@@ -26,6 +29,12 @@ const filterResonanceSlider = document.getElementById('filter-resonance');
 const keyboardElement = document.getElementById('keyboard');
 const keys = document.querySelectorAll('.key');
 scopeCanvas = document.getElementById('oscilloscope'); // Get canvas element
+// LFO UI Elements
+const lfoRateSlider = document.getElementById('lfo-rate');
+const lfoDepthSlider = document.getElementById('lfo-depth');
+const lfoWaveformSelect = document.getElementById('lfo-waveform');
+const lfoTargetSelect = document.getElementById('lfo-target');
+
 
 // --- Note Frequencies (Hz) - Expanded for C3-C5 ---
 const noteFrequencies = {
@@ -71,12 +80,26 @@ function setupAudioContext() {
             analyser.fftSize = 2048; // Standard FFT size
             scopeDataArray = new Uint8Array(analyser.frequencyBinCount); // For time domain data
 
-            // Connect analyser before master gain to visualize raw synth output
-            // The source (currentVCA) will connect to analyser in noteOn
-            analyser.connect(masterGain);
-            masterGain.connect(audioContext.destination); // Master gain to output
+            // Setup LFO
+            lfo = audioContext.createOscillator();
+            lfoDepth = audioContext.createGain();
+            lfo.type = lfoWaveformSelect.value;
+            lfo.frequency.setValueAtTime(parseFloat(lfoRateSlider.value), audioContext.currentTime);
+            lfoDepth.gain.setValueAtTime(0, audioContext.currentTime); // Start with 0 depth
+            lfo.connect(lfoDepth); // LFO osc -> LFO depth control
+            lfo.start(); // Start LFO oscillator
 
-            console.log("AudioContext and Analyser created successfully.");
+            // Setup Tremolo Gain Node (inserted before analyser)
+            tremoloGain = audioContext.createGain();
+            tremoloGain.gain.setValueAtTime(1.0, audioContext.currentTime); // Default to pass-through
+
+            // Connect analyser and main signal path including tremolo
+            // VCA -> tremoloGain -> analyser -> masterGain -> destination
+            tremoloGain.connect(analyser);
+            analyser.connect(masterGain);
+            masterGain.connect(audioContext.destination);
+
+            console.log("AudioContext, Analyser, and LFO created successfully.");
 
             // Get canvas context
             if (scopeCanvas) {
@@ -221,14 +244,59 @@ function midiNoteOn(noteNumber, velocity) {
     currentVCA.gain.setValueAtTime(0, now); // Start silent
     currentVCA.gain.linearRampToValueAtTime(gain, now + 0.01); // Ramp up to velocity-based gain
 
-    // Connect nodes: Osc -> Filter -> VCA -> Analyser -> MasterGain -> Destination
+    // Connect main signal path: Osc -> Filter -> VCA -> tremoloGain (-> analyser is already connected)
     currentOscillator.connect(currentFilter);
     currentFilter.connect(currentVCA);
-    if (analyser) {
-        currentVCA.connect(analyser); // VCA output goes to analyser
+    currentVCA.connect(tremoloGain); // VCA connects to the tremolo gain node
+
+    // --- LFO Connection Logic ---
+    const lfoTarget = lfoTargetSelect.value;
+    const lfoDepthValue = parseFloat(lfoDepthSlider.value);
+
+    // Disconnect LFO from any previous target (important!)
+    try { lfoDepth.disconnect(); } catch (e) { /* ignore if not connected */ }
+
+    if (lfoTarget !== 'none' && lfoDepthValue > 0) {
+        switch (lfoTarget) {
+            case 'pitch':
+                // Scale depth: 0=0 cents, 1= +/- 1200 cents (1 octave) - adjust scale as needed
+                const detuneAmount = lfoDepthValue * 1200;
+                lfoDepth.gain.setValueAtTime(detuneAmount, now);
+                lfoDepth.connect(currentOscillator.detune);
+                console.log(`LFO targeting Pitch, Depth: ${detuneAmount.toFixed(0)} cents`);
+                break;
+            case 'filter':
+                // Scale depth: 0=0 Hz, 1= +/- 5000 Hz (example) - adjust scale as needed
+                const filterModAmount = lfoDepthValue * 5000;
+                lfoDepth.gain.setValueAtTime(filterModAmount, now);
+                lfoDepth.connect(currentFilter.frequency);
+                 console.log(`LFO targeting Filter Cutoff, Depth: +/- ${filterModAmount.toFixed(0)} Hz`);
+                break;
+            case 'amplitude':
+                // Scale depth: 0=gain 1, 1=gain oscillates 0 to 1.
+                // We connect LFO depth (scaled 0 to 0.5) to the *offset* of the tremolo gain param.
+                // Set the base gain to 0.5. LFO modulates it +/- 0.5.
+                // This requires AudioParam manipulation. A simpler way for basic tremolo:
+                // Map depth slider 0->1 to LFO gain 0->1. Connect LFO to tremoloGain.gain.
+                // This modulates gain between 0 and 1 (full tremolo at max depth).
+                // Let's use the simpler way first.
+                lfoDepth.gain.setValueAtTime(lfoDepthValue, now); // LFO gain = depth slider
+                lfoDepth.connect(tremoloGain.gain); // Modulates the gain directly (0 to 1 range)
+                // To prevent silence at max depth when LFO hits 0, we might need a more complex setup
+                // involving summing signals or using WaveShaperNode, but let's keep it simple.
+                console.log(`LFO targeting Amplitude, Depth: ${lfoDepthValue.toFixed(2)}`);
+                break;
+        }
     } else {
-        currentVCA.connect(masterGain); // Fallback if analyser failed
+         // Ensure LFO depth gain is 0 if target is 'none' or depth is 0
+         lfoDepth.gain.setValueAtTime(0, now);
+         // Ensure tremolo gain is reset to 1 if LFO is not targeting amplitude
+         if (lfoTarget !== 'amplitude') {
+            tremoloGain.gain.setValueAtTime(1.0, now);
+         }
     }
+    // --- End LFO Connection Logic ---
+
 
     currentOscillator.start(now);
 
@@ -390,6 +458,15 @@ function noteOff() { // General Note Off - stops whatever is playing
         }
     }
 
+    // Disconnect LFO from target when note stops
+    try { lfoDepth.disconnect(); } catch (e) { /* ignore */ }
+    // Reset tremolo gain if it was being modulated
+    if (tremoloGain) {
+        tremoloGain.gain.cancelScheduledValues(now);
+        tremoloGain.gain.setValueAtTime(1.0, now); // Reset to pass-through
+    }
+
+
     // Cleanup references
     currentOscillator = null;
     currentFilter = null;
@@ -490,6 +567,74 @@ keys.forEach(key => {
         }
      });
 });
+
+// --- LFO Control Listeners ---
+lfoRateSlider.addEventListener('input', (event) => {
+    if (lfo) {
+        const rate = parseFloat(event.target.value);
+        lfo.frequency.linearRampToValueAtTime(rate, audioContext.currentTime + 0.01);
+    }
+});
+
+lfoDepthSlider.addEventListener('input', (event) => {
+    // Depth change only takes effect on the *next* noteOn, as connections/scaling are set there.
+    // We could try to update the current note's LFO depth gain value immediately,
+    // but it requires knowing the current target and applying the correct scaling.
+    // For simplicity, let depth changes apply to subsequent notes.
+    // console.log("LFO Depth slider changed (applies on next note)");
+    // Immediate update attempt (more complex):
+    if (lfo && lfoDepth && currentOscillator) { // Check if a note is playing
+        const lfoTarget = lfoTargetSelect.value;
+        const lfoDepthValue = parseFloat(event.target.value);
+        const now = audioContext.currentTime;
+        const rampTime = now + 0.01;
+
+         if (lfoTarget !== 'none') {
+             let scaledDepth = 0;
+             switch (lfoTarget) {
+                 case 'pitch': scaledDepth = lfoDepthValue * 1200; break;
+                 case 'filter': scaledDepth = lfoDepthValue * 5000; break;
+                 case 'amplitude': scaledDepth = lfoDepthValue; break; // Simple 0-1 scaling
+             }
+             lfoDepth.gain.linearRampToValueAtTime(scaledDepth, rampTime);
+         } else {
+             lfoDepth.gain.linearRampToValueAtTime(0, rampTime); // Ensure 0 depth if target is none
+         }
+    }
+});
+
+
+lfoWaveformSelect.addEventListener('change', (event) => {
+    if (lfo) {
+        lfo.type = event.target.value;
+    }
+});
+
+lfoTargetSelect.addEventListener('change', (event) => {
+    // Target change only takes effect on the *next* noteOn, as connections are set there.
+    // We need to disconnect the LFO from the *current* note's target immediately
+    // and reset that target's modulation.
+     if (lfoDepth && currentOscillator) { // Check if a note is playing
+         const now = audioContext.currentTime;
+         const rampTime = now + 0.01;
+         // Disconnect LFO depth gain from whatever it was connected to
+         try { lfoDepth.disconnect(); } catch(e) { /* ignore */ }
+         // Reset modulation on potentially previously modulated parameters
+         currentOscillator.detune.cancelScheduledValues(now);
+         currentOscillator.detune.linearRampToValueAtTime(0, rampTime); // Reset pitch mod
+         currentFilter.frequency.cancelScheduledValues(now);
+         // Reset filter mod - careful not to override manual setting, maybe just cancel?
+         // currentFilter.frequency.linearRampToValueAtTime(parseFloat(filterCutoffSlider.value), rampTime);
+         if (tremoloGain) {
+            tremoloGain.gain.cancelScheduledValues(now);
+            tremoloGain.gain.linearRampToValueAtTime(1.0, rampTime); // Reset amp mod
+         }
+         // Set LFO depth gain to 0 until next noteOn connects it appropriately
+         lfoDepth.gain.linearRampToValueAtTime(0, rampTime);
+     }
+    // console.log("LFO Target changed (applies on next note)");
+});
+
 
 // Global mouseup
 document.addEventListener('mouseup', () => {
