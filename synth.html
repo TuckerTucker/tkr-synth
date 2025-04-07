@@ -13,6 +13,14 @@
     <button id="enable-midi-button" class="hidden">Enable MIDI Input</button> <!-- Added MIDI Button -->
     <div id="midi-status" class="hidden">MIDI Status: Disconnected</div> <!-- Added MIDI Status Display -->
 
+    <!-- Settings Buttons -->
+    <div class="settings-controls">
+        <button id="save-settings-button">Save Settings</button>
+        <button id="load-settings-button">Load Settings (Local)</button> <!-- Clarified button -->
+        <button id="export-settings-button">Export Settings</button>
+        <button id="import-settings-button">Import Settings</button> <!-- Added Import Button -->
+        <input type="file" id="import-file-input" accept=".json" style="display: none;"> <!-- Hidden File Input -->
+    </div>
 
     <div id="synthesizer" class="disabled-ui"> <!-- Changed hidden to disabled-ui -->
         <!-- ... (rest of the controls) ... -->
@@ -46,24 +54,25 @@
 
         <!-- Oscilloscope Display -->
         <div class="control-section oscilloscope-section">
-             <h2>Oscilloscope</h2>
              <canvas id="oscilloscope" width="600" height="100"></canvas>
         </div>
 
-        <!-- LFO Controls -->
-        <div class="control-section lfo-controls">
-            <h2>LFO</h2>
-            <div class="control">
-                <label for="lfo-rate">Rate:</label>
-                <input type="range" id="lfo-rate" min="0.1" max="20" step="0.1" value="5"> <!-- 0.1 Hz to 20 Hz -->
+        <!-- LFO Container -->
+        <div class="lfo-container">
+            <!-- LFO 1 Controls -->
+            <div class="control-section lfo-controls">
+                <h2>LFO 1</h2>
+                <div class="control">
+                <label for="lfo1-rate">Rate:</label>
+                <input type="range" id="lfo1-rate" min="0.1" max="20" step="0.1" value="5"> <!-- 0.1 Hz to 20 Hz -->
             </div>
             <div class="control">
-                <label for="lfo-depth">Depth:</label>
-                <input type="range" id="lfo-depth" min="0" max="1" step="0.01" value="0"> <!-- 0% to 100% -->
+                <label for="lfo1-depth">Depth:</label>
+                <input type="range" id="lfo1-depth" min="0" max="1" step="0.01" value="0"> <!-- 0% to 100% -->
             </div>
             <div class="control">
-                <label for="lfo-waveform">Wave:</label>
-                <select id="lfo-waveform">
+                <label for="lfo1-waveform">Wave:</label>
+                <select id="lfo1-waveform">
                     <option value="sine" selected>Sine</option>
                     <option value="square">Square</option>
                     <option value="sawtooth">Sawtooth</option>
@@ -71,15 +80,49 @@
                 </select>
             </div>
             <div class="control">
-                <label for="lfo-target">Target:</label>
-                <select id="lfo-target">
+                <label for="lfo1-target">Target:</label>
+                <select id="lfo1-target">
                     <option value="none" selected>None</option>
                     <option value="pitch">Pitch (Vibrato)</option>
                     <option value="filter">Filter Cutoff</option>
                     <option value="amplitude">Amplitude (Tremolo)</option>
                 </select>
             </div>
-        </div>
+             <button id="lfo1-pause-button" class="lfo-pause-button">Pause</button>
+            </div>
+
+            <!-- LFO 2 Controls -->
+            <div class="control-section lfo-controls">
+                <h2>LFO 2</h2>
+                <div class="control">
+                <label for="lfo2-rate">Rate:</label>
+                <input type="range" id="lfo2-rate" min="0.1" max="20" step="0.1" value="2"> <!-- Different default rate -->
+            </div>
+            <div class="control">
+                <label for="lfo2-depth">Depth:</label>
+                <input type="range" id="lfo2-depth" min="0" max="1" step="0.01" value="0"> <!-- 0% to 100% -->
+            </div>
+            <div class="control">
+                <label for="lfo2-waveform">Wave:</label>
+                <select id="lfo2-waveform">
+                    <option value="sine" selected>Sine</option>
+                    <option value="square">Square</option>
+                    <option value="sawtooth">Sawtooth</option>
+                    <option value="triangle">Triangle</option>
+                </select>
+            </div>
+            <div class="control">
+                <label for="lfo2-target">Target:</label>
+                <select id="lfo2-target">
+                    <option value="none" selected>None</option>
+                    <option value="pitch">Pitch (Vibrato)</option>
+                    <option value="filter">Filter Cutoff</option>
+                    <option value="amplitude">Amplitude (Tremolo)</option>
+                </select>
+            </div>
+             <button id="lfo2-pause-button" class="lfo-pause-button">Pause</button>
+            </div>
+        </div> <!-- End lfo-container -->
 
 
         <!-- Expanded Keyboard (C3-C5) -->

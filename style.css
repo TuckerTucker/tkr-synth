@@ -199,6 +199,68 @@ button:hover {
     height: 100px; /* Match canvas height attribute */
 }
 
+/* LFO Container Styling */
+.lfo-container {
+    display: flex;
+    gap: 20px; /* Add space between LFO sections */
+    flex-wrap: wrap; /* Allow wrapping on smaller screens if needed */
+    border-bottom: 1px solid #eee; /* Add border like other sections */
+    padding-bottom: 15px; /* Add padding like other sections */
+    margin-bottom: 20px; /* Add margin like other sections */
+
+}
+
+.lfo-container .control-section.lfo-controls {
+    flex: 1; /* Allow LFO sections to grow and shrink */
+    min-width: 250px; /* Minimum width before wrapping */
+    border-bottom: none; /* Remove individual borders */
+    padding-bottom: 0; /* Remove individual padding */
+    margin-bottom: 0; /* Remove individual margin */
+}
+
+.lfo-pause-button {
+    margin-top: 10px; /* Add some space above the button */
+    padding: 5px 10px; /* Smaller padding */
+    font-size: 0.9em;
+    background-color: #ffc107; /* Amber color */
+    border-color: #ffc107;
+    min-width: 80px; /* Fixed width */
+    text-align: center;
+}
+.lfo-pause-button:hover {
+    background-color: #ffa000;
+}
+.lfo-pause-button.paused { /* Style when paused */
+     background-color: #4caf50; /* Green color */
+     border-color: #4caf50;
+}
+.lfo-pause-button.paused:hover {
+     background-color: #388e3c;
+}
+
+/* Settings Controls */
+.settings-controls {
+    margin: 15px 0; /* Space above and below */
+    display: flex;
+    gap: 10px; /* Space between buttons */
+}
+
+#save-settings-button,
+#load-settings-button,
+#export-settings-button,
+#import-settings-button {
+    padding: 8px 15px;
+    font-size: 0.9em;
+    background-color: #607d8b; /* Blue Grey */
+    border-color: #607d8b;
+}
+#save-settings-button:hover,
+#load-settings-button:hover,
+#export-settings-button:hover,
+#import-settings-button:hover {
+    background-color: #455a64;
+}
+
 
 /* Utility */
 .hidden {

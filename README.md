@@ -10,6 +10,12 @@ A basic web-based synthesizer built with HTML, CSS, and the Web Audio API. It fe
     *   Oscillator Waveform (Sine, Square, Sawtooth, Triangle)
     *   Filter Cutoff Frequency
     *   Filter Resonance (Q)
+*   **Dual LFOs:** Two independent Low-Frequency Oscillators, each with:
+    *   Rate control (0.1 Hz - 20 Hz)
+    *   Depth control
+    *   Waveform selector (Sine, Square, Sawtooth, Triangle)
+    *   Target selector (None, Pitch, Filter Cutoff, Amplitude)
+    *   Pause/Resume button
 *   **On-Screen Keyboard:** A 25-key (C3-C5) keyboard playable with mouse/touch or physical computer keyboard (uses 'a', 'w', 's', 'e', 'd', 'f', 't', 'g', 'y', 'h', 'u', 'j', 'k' for C4-C5).
 *   **Web MIDI API Integration:**
     *   Connect external MIDI controllers.
@@ -21,6 +27,12 @@ A basic web-based synthesizer built with HTML, CSS, and the Web Audio API. It fe
     *   Automatic MIDI connection attempt after audio starts (if permission previously granted).
 *   **Oscilloscope:** Visualizes the audio output waveform.
 *   **Initial Disabled State:** The synth UI is visible but disabled until audio is started.
+*   **Settings Management:**
+    *   Save current synth settings to browser's `localStorage`.
+    *   Load settings automatically on page start if previously saved.
+    *   Manually load settings from `localStorage`.
+    *   Export current settings to a `.json` file.
+    *   Import settings from a `.json` file.
 
 ## How to Use
 
@@ -37,6 +49,12 @@ A basic web-based synthesizer built with HTML, CSS, and the Web Audio API. It fe
     *   Use the mapped computer keyboard keys.
     *   Play notes on your connected MIDI controller.
     *   Adjust parameters using the sliders/select menu or mapped MIDI CC controls.
+    *   Configure LFO 1 and LFO 2 rate, depth, waveform, and target. Use the Pause/Resume buttons to toggle modulation.
+6.  **Manage Settings (Optional):**
+    *   Click "Save Settings" to store the current patch in your browser.
+    *   Click "Load Settings (Local)" to restore the last saved patch.
+    *   Click "Export Settings" to download the current patch as a `synth-settings.json` file.
+    *   Click "Import Settings" and select a previously exported `.json` file to load it.
 
 ## Browser Compatibility
 

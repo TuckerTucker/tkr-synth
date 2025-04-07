@@ -13,9 +13,8 @@ let scopeCanvas = null; // Canvas element
 let scopeCtx = null; // Canvas 2D context
 let scopeDataArray = null; // Array for waveform data
 let scopeAnimationId = null; // To control the animation loop
-let lfo = null; // LFO oscillator node
-let lfoDepth = null; // Gain node controlling LFO amount
 let tremoloGain = null; // Extra gain node for amplitude modulation
+let lfos = []; // Array to hold LFO instances
 
 // --- UI Elements ---
 const startButton = document.getElementById('start-audio-button');
@@ -30,10 +29,213 @@ const keyboardElement = document.getElementById('keyboard');
 const keys = document.querySelectorAll('.key');
 scopeCanvas = document.getElementById('oscilloscope'); // Get canvas element
 // LFO UI Elements
-const lfoRateSlider = document.getElementById('lfo-rate');
-const lfoDepthSlider = document.getElementById('lfo-depth');
-const lfoWaveformSelect = document.getElementById('lfo-waveform');
-const lfoTargetSelect = document.getElementById('lfo-target');
+// LFO 1 UI Elements
+const lfo1RateSliderId = 'lfo1-rate'; // Renamed ID
+const lfo1DepthSliderId = 'lfo1-depth'; // Renamed ID
+const lfo1WaveformSelectId = 'lfo1-waveform'; // Renamed ID
+const lfo1TargetSelectId = 'lfo1-target'; // Renamed ID
+
+// LFO 2 UI Elements
+const lfo2RateSliderId = 'lfo2-rate';
+const lfo2DepthSliderId = 'lfo2-depth';
+const lfo2WaveformSelectId = 'lfo2-waveform';
+const lfo2TargetSelectId = 'lfo2-target';
+const lfo2PauseButtonId = 'lfo2-pause-button';
+
+// Settings Buttons
+const saveSettingsButton = document.getElementById('save-settings-button');
+const loadSettingsButton = document.getElementById('load-settings-button');
+const exportSettingsButton = document.getElementById('export-settings-button');
+const importSettingsButton = document.getElementById('import-settings-button'); // Added import button element
+const importFileInput = document.getElementById('import-file-input'); // Added file input element
+const SETTINGS_KEY = 'webSynthSettingsV2'; // localStorage key (V2 for new structure)
+
+
+// --- LFO Class ---
+class LFO {
+    constructor(idPrefix, rateSliderId, depthSliderId, waveformSelectId, targetSelectId, pauseButtonId) {
+        this.idPrefix = idPrefix;
+        this.rateSlider = document.getElementById(rateSliderId);
+        this.depthSlider = document.getElementById(depthSliderId);
+        this.waveformSelect = document.getElementById(waveformSelectId);
+        this.targetSelect = document.getElementById(targetSelectId);
+        this.pauseButton = document.getElementById(pauseButtonId);
+
+        this.oscillator = null;
+        this.depthGain = null;
+        this.isPaused = false; // Initial state
+        this.audioCtx = null;
+
+        this.currentConnections = []; // Track current connections { node: AudioNode, param: string }
+    }
+
+    init(audioCtx) {
+        this.audioCtx = audioCtx;
+        this.oscillator = this.audioCtx.createOscillator();
+        this.depthGain = this.audioCtx.createGain();
+
+        this.oscillator.type = this.waveformSelect.value;
+        this.oscillator.frequency.setValueAtTime(parseFloat(this.rateSlider.value), this.audioCtx.currentTime);
+        this.depthGain.gain.setValueAtTime(0, this.audioCtx.currentTime); // Start at 0 depth
+
+        this.oscillator.connect(this.depthGain);
+        this.oscillator.start();
+        console.log(`LFO (${this.idPrefix || 'default'}) initialized.`);
+
+        // Add event listeners specific to this LFO's controls
+        this.rateSlider.addEventListener('input', () => this.updateRate());
+        this.depthSlider.addEventListener('input', () => this.updateDepthGain());
+        this.waveformSelect.addEventListener('change', () => this.updateWaveform());
+        this.targetSelect.addEventListener('change', () => this.handleTargetChange());
+        if (this.pauseButton) {
+            this.pauseButton.addEventListener('click', () => this.togglePause());
+        }
+    }
+
+    togglePause() {
+        if (!this.audioCtx || !this.depthGain) return;
+        this.isPaused = !this.isPaused;
+        const now = this.audioCtx.currentTime;
+        const rampTime = now + 0.01;
+
+        if (this.isPaused) {
+            this.depthGain.gain.cancelScheduledValues(now);
+            this.depthGain.gain.linearRampToValueAtTime(0, rampTime); // Set depth gain to 0
+            this.pauseButton.textContent = 'Resume';
+            this.pauseButton.classList.add('paused');
+            console.log(`LFO (${this.idPrefix}) Paused.`);
+        } else {
+            // Restore depth gain by recalculating based on slider/target
+            this.updateDepthGain();
+            this.pauseButton.textContent = 'Pause';
+            this.pauseButton.classList.remove('paused');
+            console.log(`LFO (${this.idPrefix}) Resumed.`);
+        }
+    }
+
+    updateRate() {
+        if (!this.oscillator || !this.audioCtx) return;
+        const rate = parseFloat(this.rateSlider.value);
+        this.oscillator.frequency.linearRampToValueAtTime(rate, this.audioCtx.currentTime + 0.01);
+    }
+
+    updateWaveform() {
+        if (!this.oscillator) return;
+        this.oscillator.type = this.waveformSelect.value;
+    }
+
+    updateDepthGain() {
+        if (!this.depthGain || !this.audioCtx) return;
+        const depthValue = parseFloat(this.depthSlider.value);
+        const targetType = this.targetSelect.value;
+        let scaledDepth = 0;
+
+        // Calculate scaled depth based on the *selected* target type
+        switch (targetType) {
+            case 'pitch': scaledDepth = depthValue * 1200; break; // +/- 1200 cents
+            case 'filter': scaledDepth = depthValue * 5000; break; // +/- 5000 Hz
+            case 'amplitude': scaledDepth = depthValue; break; // 0 to 1 for direct gain mod
+            default: scaledDepth = 0; break;
+        }
+
+        // Update the LFO's depth gain node value only if not paused.
+        if (!this.isPaused) {
+            this.depthGain.gain.linearRampToValueAtTime(scaledDepth, this.audioCtx.currentTime + 0.01);
+            // console.log(`LFO Depth Gain set to ${scaledDepth.toFixed(2)} for target ${targetType}`);
+        } else {
+             // Ensure gain stays 0 if paused
+             this.depthGain.gain.cancelScheduledValues(this.audioCtx.currentTime);
+             this.depthGain.gain.setValueAtTime(0, this.audioCtx.currentTime);
+        }
+    }
+
+     handleTargetChange() {
+        // When target changes, we need to disconnect from the old target *if a note is playing*
+        // and reset its modulation, then set the depth gain to 0 until the next noteOn.
+        if (this.currentConnections.length > 0 && this.audioCtx) {
+             const now = this.audioCtx.currentTime;
+             const rampTime = now + 0.01;
+             console.log(`LFO target changed, disconnecting from previous targets.`);
+             this.disconnect(); // Disconnect from all current targets
+
+             // Reset the LFO depth gain itself to 0 until next note connects it
+             this.depthGain.gain.linearRampToValueAtTime(0, rampTime);
+        }
+         // Update the depth gain based on the *new* target and current slider value
+         this.updateDepthGain();
+    }
+
+
+    connect(targetNode, targetParamName) {
+        if (!this.oscillator || !this.depthGain || !this.audioCtx || !targetNode) return;
+
+        const targetType = this.targetSelect.value;
+        const depthValue = parseFloat(this.depthSlider.value);
+
+        if (targetType === 'none' || depthValue === 0) {
+            this.disconnect(); // Ensure disconnected if target is none or depth is 0
+            return;
+        }
+
+        // Ensure depth gain is set correctly for the target *before* connecting
+        this.updateDepthGain();
+
+        try {
+            let targetAudioParam = null;
+            if (targetParamName === 'gain' && targetNode instanceof GainNode) {
+                 targetAudioParam = targetNode.gain;
+            } else if (targetParamName === 'detune' && targetNode instanceof OscillatorNode) {
+                 targetAudioParam = targetNode.detune;
+            } else if (targetParamName === 'frequency' && targetNode instanceof BiquadFilterNode) {
+                 targetAudioParam = targetNode.frequency;
+            }
+            // Add other potential AudioParams here if needed
+
+            if (targetAudioParam) {
+                console.log(`Connecting LFO Depth to ${targetParamName}`);
+                this.depthGain.connect(targetAudioParam);
+                this.currentConnections.push({ node: targetNode, param: targetParamName }); // Track connection
+            } else {
+                 console.warn(`LFO Connect: Could not find AudioParam '${targetParamName}' on target node.`);
+            }
+
+        } catch (e) {
+            console.error(`Error connecting LFO: ${e}`);
+        }
+    }
+
+    disconnect() {
+        if (!this.depthGain || !this.audioCtx) return;
+
+        try {
+            this.depthGain.disconnect(); // Disconnects from all destinations
+            // console.log(`LFO disconnected from all targets.`);
+
+            // We also need to reset the modulation effect on the parameters it *was* connected to.
+            const now = this.audioCtx.currentTime;
+            const rampTime = now + 0.01;
+            this.currentConnections.forEach(conn => {
+                try {
+                    if (conn.param === 'detune' && conn.node instanceof OscillatorNode) {
+                        conn.node.detune.cancelScheduledValues(now);
+                        conn.node.detune.linearRampToValueAtTime(0, rampTime);
+                    } else if (conn.param === 'frequency' && conn.node instanceof BiquadFilterNode) {
+                        conn.node.frequency.cancelScheduledValues(now);
+                        // Don't reset to slider value here, just cancel LFO influence
+                    } else if (conn.param === 'gain' && conn.node instanceof GainNode) {
+                        conn.node.gain.cancelScheduledValues(now);
+                        conn.node.gain.linearRampToValueAtTime(1.0, rampTime); // Reset gain to 1
+                    }
+                } catch(e) { console.warn(`Error resetting param ${conn.param} during LFO disconnect: ${e}`); }
+            });
+
+        } catch (e) {
+            console.error(`Error disconnecting LFO: ${e}`);
+        } finally {
+             this.currentConnections = []; // Clear tracked connections
+        }
+    }
+}
 
 
 // --- Note Frequencies (Hz) - Expanded for C3-C5 ---
@@ -80,16 +282,7 @@ function setupAudioContext() {
             analyser.fftSize = 2048; // Standard FFT size
             scopeDataArray = new Uint8Array(analyser.frequencyBinCount); // For time domain data
 
-            // Setup LFO
-            lfo = audioContext.createOscillator();
-            lfoDepth = audioContext.createGain();
-            lfo.type = lfoWaveformSelect.value;
-            lfo.frequency.setValueAtTime(parseFloat(lfoRateSlider.value), audioContext.currentTime);
-            lfoDepth.gain.setValueAtTime(0, audioContext.currentTime); // Start with 0 depth
-            lfo.connect(lfoDepth); // LFO osc -> LFO depth control
-            lfo.start(); // Start LFO oscillator
-
-            // Setup Tremolo Gain Node (inserted before analyser)
+            // Setup Tremolo Gain Node (inserted before analyser) - needed even if LFO target isn't amplitude initially
             tremoloGain = audioContext.createGain();
             tremoloGain.gain.setValueAtTime(1.0, audioContext.currentTime); // Default to pass-through
 
@@ -99,7 +292,16 @@ function setupAudioContext() {
             analyser.connect(masterGain);
             masterGain.connect(audioContext.destination);
 
-            console.log("AudioContext, Analyser, and LFO created successfully.");
+            console.log("AudioContext and Analyser created successfully.");
+
+            // Initialize LFOs
+            const lfo1 = new LFO('lfo1', lfo1RateSliderId, lfo1DepthSliderId, lfo1WaveformSelectId, lfo1TargetSelectId, 'lfo1-pause-button');
+            lfo1.init(audioContext);
+            lfos.push(lfo1);
+
+            const lfo2 = new LFO('lfo2', lfo2RateSliderId, lfo2DepthSliderId, lfo2WaveformSelectId, lfo2TargetSelectId, 'lfo2-pause-button');
+            lfo2.init(audioContext);
+            lfos.push(lfo2);
 
             // Get canvas context
             if (scopeCanvas) {
@@ -250,50 +452,27 @@ function midiNoteOn(noteNumber, velocity) {
     currentVCA.connect(tremoloGain); // VCA connects to the tremolo gain node
 
     // --- LFO Connection Logic ---
-    const lfoTarget = lfoTargetSelect.value;
-    const lfoDepthValue = parseFloat(lfoDepthSlider.value);
-
-    // Disconnect LFO from any previous target (important!)
-    try { lfoDepth.disconnect(); } catch (e) { /* ignore if not connected */ }
-
-    if (lfoTarget !== 'none' && lfoDepthValue > 0) {
-        switch (lfoTarget) {
+    lfos.forEach(lfoInstance => {
+        const targetType = lfoInstance.targetSelect.value;
+        switch (targetType) {
             case 'pitch':
-                // Scale depth: 0=0 cents, 1= +/- 1200 cents (1 octave) - adjust scale as needed
-                const detuneAmount = lfoDepthValue * 1200;
-                lfoDepth.gain.setValueAtTime(detuneAmount, now);
-                lfoDepth.connect(currentOscillator.detune);
-                console.log(`LFO targeting Pitch, Depth: ${detuneAmount.toFixed(0)} cents`);
+                lfoInstance.connect(currentOscillator, 'detune');
                 break;
             case 'filter':
-                // Scale depth: 0=0 Hz, 1= +/- 5000 Hz (example) - adjust scale as needed
-                const filterModAmount = lfoDepthValue * 5000;
-                lfoDepth.gain.setValueAtTime(filterModAmount, now);
-                lfoDepth.connect(currentFilter.frequency);
-                 console.log(`LFO targeting Filter Cutoff, Depth: +/- ${filterModAmount.toFixed(0)} Hz`);
+                lfoInstance.connect(currentFilter, 'frequency');
                 break;
             case 'amplitude':
-                // Scale depth: 0=gain 1, 1=gain oscillates 0 to 1.
-                // We connect LFO depth (scaled 0 to 0.5) to the *offset* of the tremolo gain param.
-                // Set the base gain to 0.5. LFO modulates it +/- 0.5.
-                // This requires AudioParam manipulation. A simpler way for basic tremolo:
-                // Map depth slider 0->1 to LFO gain 0->1. Connect LFO to tremoloGain.gain.
-                // This modulates gain between 0 and 1 (full tremolo at max depth).
-                // Let's use the simpler way first.
-                lfoDepth.gain.setValueAtTime(lfoDepthValue, now); // LFO gain = depth slider
-                lfoDepth.connect(tremoloGain.gain); // Modulates the gain directly (0 to 1 range)
-                // To prevent silence at max depth when LFO hits 0, we might need a more complex setup
-                // involving summing signals or using WaveShaperNode, but let's keep it simple.
-                console.log(`LFO targeting Amplitude, Depth: ${lfoDepthValue.toFixed(2)}`);
+                lfoInstance.connect(tremoloGain, 'gain');
+                break;
+            case 'none':
+            default:
+                lfoInstance.disconnect(); // Ensure disconnected if target is none
                 break;
         }
-    } else {
-         // Ensure LFO depth gain is 0 if target is 'none' or depth is 0
-         lfoDepth.gain.setValueAtTime(0, now);
-         // Ensure tremolo gain is reset to 1 if LFO is not targeting amplitude
-         if (lfoTarget !== 'amplitude') {
-            tremoloGain.gain.setValueAtTime(1.0, now);
-         }
+    });
+    // Ensure tremolo gain is reset if *no* LFO is targeting amplitude
+    if (!lfos.some(lfo => lfo.targetSelect.value === 'amplitude' && parseFloat(lfo.depthSlider.value) > 0)) {
+         if (tremoloGain) tremoloGain.gain.setValueAtTime(1.0, now);
     }
     // --- End LFO Connection Logic ---
 
@@ -458,13 +637,8 @@ function noteOff() { // General Note Off - stops whatever is playing
         }
     }
 
-    // Disconnect LFO from target when note stops
-    try { lfoDepth.disconnect(); } catch (e) { /* ignore */ }
-    // Reset tremolo gain if it was being modulated
-    if (tremoloGain) {
-        tremoloGain.gain.cancelScheduledValues(now);
-        tremoloGain.gain.setValueAtTime(1.0, now); // Reset to pass-through
-    }
+    // Disconnect LFOs when note stops
+    lfos.forEach(lfoInstance => lfoInstance.disconnect());
 
 
     // Cleanup references
@@ -480,6 +654,161 @@ function noteOff() { // General Note Off - stops whatever is playing
     activeNote = null;
     activeMIDINote = null;
 }
+
+// --- Settings Functions ---
+
+function gatherSettings() {
+    const settings = {
+        masterVolume: masterVolumeSlider.value,
+        oscWaveform: oscWaveformSelect.value,
+        filterCutoff: filterCutoffSlider.value,
+        filterResonance: filterResonanceSlider.value,
+        lfos: []
+    };
+    lfos.forEach(lfoInstance => {
+        settings.lfos.push({
+            rate: lfoInstance.rateSlider.value,
+            depth: lfoInstance.depthSlider.value,
+            waveform: lfoInstance.waveformSelect.value,
+            target: lfoInstance.targetSelect.value,
+            // Note: isPaused state is not saved, LFOs always start unpaused
+        });
+    });
+    return settings;
+}
+
+function saveSettings() {
+    try {
+        const settings = gatherSettings();
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        console.log('Settings saved to localStorage.');
+        // Optional: Add visual feedback (e.g., briefly change button text)
+    } catch (e) {
+        console.error('Error saving settings:', e);
+        alert('Failed to save settings. LocalStorage might be full or disabled.');
+    }
+}
+
+function applySettings(settings) {
+    if (!settings) return;
+
+    console.log('Applying loaded settings:', settings);
+
+    // Apply global settings
+    masterVolumeSlider.value = settings.masterVolume ?? 0.7;
+    oscWaveformSelect.value = settings.oscWaveform ?? 'sine';
+    filterCutoffSlider.value = settings.filterCutoff ?? 5000;
+    filterResonanceSlider.value = settings.filterResonance ?? 1;
+
+    // Apply settings to audio nodes if context exists
+    if (audioContext && masterGain) {
+        masterGain.gain.setValueAtTime(parseFloat(masterVolumeSlider.value), audioContext.currentTime);
+    }
+    // Note: Filter/Oscillator changes apply on next noteOn or immediately if playing (handled by existing listeners)
+
+    // Apply LFO settings
+    if (settings.lfos && settings.lfos.length === lfos.length) {
+        settings.lfos.forEach((lfoSetting, index) => {
+            const lfoInstance = lfos[index];
+            if (lfoInstance) {
+                lfoInstance.rateSlider.value = lfoSetting.rate ?? 5;
+                lfoInstance.depthSlider.value = lfoSetting.depth ?? 0;
+                lfoInstance.waveformSelect.value = lfoSetting.waveform ?? 'sine';
+                lfoInstance.targetSelect.value = lfoSetting.target ?? 'none';
+
+                // Trigger updates in the LFO instance if audio context exists
+                if (lfoInstance.audioCtx) {
+                    lfoInstance.updateRate();
+                    lfoInstance.updateWaveform();
+                    // updateDepthGain also handles applying the gain if not paused
+                    lfoInstance.updateDepthGain();
+                    // handleTargetChange ensures connections are correct if a note is playing
+                    // but might be redundant here as noteOn handles connections.
+                    // Let's rely on noteOn/updateDepthGain for applying audio changes.
+                }
+                 // Reset pause state visually (LFOs always load unpaused)
+                 if (lfoInstance.pauseButton) {
+                    lfoInstance.isPaused = false;
+                    lfoInstance.pauseButton.textContent = 'Pause';
+                    lfoInstance.pauseButton.classList.remove('paused');
+                 }
+            }
+        });
+    }
+    console.log('Settings applied.');
+}
+
+
+function loadSettings() {
+    try {
+        const savedSettings = localStorage.getItem(SETTINGS_KEY);
+        if (savedSettings) {
+            const settings = JSON.parse(savedSettings);
+            applySettings(settings);
+        } else {
+            console.log('No saved settings found.');
+        }
+    } catch (e) {
+        console.error('Error loading or parsing settings:', e);
+        // Optional: Clear invalid settings
+        // localStorage.removeItem(SETTINGS_KEY);
+    }
+}
+
+function exportSettings() {
+    try {
+        const settings = gatherSettings();
+        const settingsString = JSON.stringify(settings, null, 2); // Pretty print JSON
+        const blob = new Blob([settingsString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'synth-settings.json'; // Filename for download
+        document.body.appendChild(a); // Required for Firefox
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url); // Clean up the object URL
+        console.log('Settings exported.');
+    } catch (e) {
+        console.error('Error exporting settings:', e);
+        alert('Failed to export settings.');
+    }
+}
+
+function importSettings(event) {
+    const file = event.target.files[0];
+    if (!file) {
+        return; // No file selected
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+        try {
+            const settingsString = e.target.result;
+            const settings = JSON.parse(settingsString);
+            applySettings(settings);
+            console.log('Settings imported successfully from file.');
+            // Optional: Save imported settings to localStorage immediately?
+            // saveSettings();
+        } catch (err) {
+            console.error('Error reading or parsing imported settings file:', err);
+            alert('Failed to import settings. Please ensure the file is valid JSON.');
+        } finally {
+            // Reset file input value to allow importing the same file again if needed
+             event.target.value = null;
+        }
+    };
+
+    reader.onerror = function(e) {
+        console.error('Error reading file:', e);
+        alert('Failed to read the selected file.');
+         event.target.value = null; // Reset file input
+    };
+
+    reader.readAsText(file);
+}
+
 
 // --- Event Listeners ---
 
@@ -566,74 +895,24 @@ keys.forEach(key => {
             noteOff();
         }
      });
-});
+}); // <-- Added missing closing brace for keys.forEach
 
-// --- LFO Control Listeners ---
-lfoRateSlider.addEventListener('input', (event) => {
-    if (lfo) {
-        const rate = parseFloat(event.target.value);
-        lfo.frequency.linearRampToValueAtTime(rate, audioContext.currentTime + 0.01);
-    }
-});
-
-lfoDepthSlider.addEventListener('input', (event) => {
-    // Depth change only takes effect on the *next* noteOn, as connections/scaling are set there.
-    // We could try to update the current note's LFO depth gain value immediately,
-    // but it requires knowing the current target and applying the correct scaling.
-    // For simplicity, let depth changes apply to subsequent notes.
-    // console.log("LFO Depth slider changed (applies on next note)");
-    // Immediate update attempt (more complex):
-    if (lfo && lfoDepth && currentOscillator) { // Check if a note is playing
-        const lfoTarget = lfoTargetSelect.value;
-        const lfoDepthValue = parseFloat(event.target.value);
-        const now = audioContext.currentTime;
-        const rampTime = now + 0.01;
-
-         if (lfoTarget !== 'none') {
-             let scaledDepth = 0;
-             switch (lfoTarget) {
-                 case 'pitch': scaledDepth = lfoDepthValue * 1200; break;
-                 case 'filter': scaledDepth = lfoDepthValue * 5000; break;
-                 case 'amplitude': scaledDepth = lfoDepthValue; break; // Simple 0-1 scaling
-             }
-             lfoDepth.gain.linearRampToValueAtTime(scaledDepth, rampTime);
-         } else {
-             lfoDepth.gain.linearRampToValueAtTime(0, rampTime); // Ensure 0 depth if target is none
-         }
-    }
-});
-
-
-lfoWaveformSelect.addEventListener('change', (event) => {
-    if (lfo) {
-        lfo.type = event.target.value;
-    }
-});
-
-lfoTargetSelect.addEventListener('change', (event) => {
-    // Target change only takes effect on the *next* noteOn, as connections are set there.
-    // We need to disconnect the LFO from the *current* note's target immediately
-    // and reset that target's modulation.
-     if (lfoDepth && currentOscillator) { // Check if a note is playing
-         const now = audioContext.currentTime;
-         const rampTime = now + 0.01;
-         // Disconnect LFO depth gain from whatever it was connected to
-         try { lfoDepth.disconnect(); } catch(e) { /* ignore */ }
-         // Reset modulation on potentially previously modulated parameters
-         currentOscillator.detune.cancelScheduledValues(now);
-         currentOscillator.detune.linearRampToValueAtTime(0, rampTime); // Reset pitch mod
-         currentFilter.frequency.cancelScheduledValues(now);
-         // Reset filter mod - careful not to override manual setting, maybe just cancel?
-         // currentFilter.frequency.linearRampToValueAtTime(parseFloat(filterCutoffSlider.value), rampTime);
-         if (tremoloGain) {
-            tremoloGain.gain.cancelScheduledValues(now);
-            tremoloGain.gain.linearRampToValueAtTime(1.0, rampTime); // Reset amp mod
-         }
-         // Set LFO depth gain to 0 until next noteOn connects it appropriately
-         lfoDepth.gain.linearRampToValueAtTime(0, rampTime);
-     }
-    // console.log("LFO Target changed (applies on next note)");
-});
+// Settings Buttons Listeners
+if (saveSettingsButton) {
+    saveSettingsButton.addEventListener('click', saveSettings);
+}
+if (loadSettingsButton) {
+    loadSettingsButton.addEventListener('click', loadSettings);
+}
+if (exportSettingsButton) {
+    exportSettingsButton.addEventListener('click', exportSettings);
+}
+if (importSettingsButton && importFileInput) { // Added listeners for import
+    importSettingsButton.addEventListener('click', () => {
+        importFileInput.click(); // Trigger hidden file input
+    });
+    importFileInput.addEventListener('change', importSettings);
+}
 
 
 // Global mouseup
@@ -723,6 +1002,12 @@ function drawOscilloscope() {
     // Request next frame
     scopeAnimationId = requestAnimationFrame(drawOscilloscope);
 }
+
+// Initial Load Attempt
+// Use DOMContentLoaded to ensure all elements are available before trying to load/apply
+document.addEventListener('DOMContentLoaded', (event) => {
+    loadSettings();
+});
 
 
 console.log("Synth script loaded. Click 'Start Audio', then 'Enable MIDI'.");
