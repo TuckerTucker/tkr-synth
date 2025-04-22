@@ -1,0 +1,20 @@
+{
+  "masterVolume": "0.7",
+  "oscWaveform": "sawtooth",
+  "filterCutoff": "5000",
+  "filterResonance": "27.5",
+  "lfos": [
+    {
+      "rate": "5",
+      "depth": "0.81",
+      "waveform": "square",
+      "target": "filter"
+    },
+    {
+      "rate": "2.9",
+      "depth": "0.6",
+      "waveform": "sine",
+      "target": "pitch"
+    }
+  ]
+}
